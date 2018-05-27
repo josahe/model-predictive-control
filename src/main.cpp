@@ -35,7 +35,7 @@ string hasData(string s) {
 // Evaluate a polynomial.
 double polyeval(Eigen::VectorXd coeffs, double x) {
   double result = 0.0;
-  for (int i = 0; i < coeffs.size(); i++) {
+  for (int i = 0; i < coeffs.size(); ++i) {
     result += coeffs[i] * pow(x, i);
   }
   return result;
@@ -43,19 +43,19 @@ double polyeval(Eigen::VectorXd coeffs, double x) {
 
 // Fit a polynomial.
 // Adapted from
-// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
+// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl
 Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
                         int order) {
   assert(xvals.size() == yvals.size());
   assert(order >= 1 && order <= xvals.size() - 1);
   Eigen::MatrixXd A(xvals.size(), order + 1);
 
-  for (int i = 0; i < xvals.size(); i++) {
+  for (int i = 0; i < xvals.size(); ++i) {
     A(i, 0) = 1.0;
   }
 
-  for (int j = 0; j < xvals.size(); j++) {
-    for (int i = 0; i < order; i++) {
+  for (int j = 0; j < xvals.size(); ++j) {
+    for (int i = 0; i < order; ++i) {
       A(j, i + 1) = A(j, i) * xvals(j);
     }
   }
@@ -84,48 +84,83 @@ int main() {
         auto j = json::parse(s);
         string event = j[0].get<string>();
         if (event == "telemetry") {
-          // j[1] is the data JSON object
-          vector<double> ptsx = j[1]["ptsx"];
-          vector<double> ptsy = j[1]["ptsy"];
-          double px = j[1]["x"];
-          double py = j[1]["y"];
-          double psi = j[1]["psi"];
-          double v = j[1]["speed"];
+          // NOTE j[1] is the data JSON object
 
-          /*
-          * TODO: Calculate steering angle and throttle using MPC.
-          *
-          * Both are in between [-1, 1].
-          *
+          // Waypoints. The points in the middle of the track corresponding to
+          // the ideal trajectory of the car
+          vector<double> ptsx = j[1]["ptsx"]; // waypoints x
+          vector<double> ptsy = j[1]["ptsy"]; // waypoints y
+
+          // Current vehicle state.
+          double px = j[1]["x"]; // current x
+          double py = j[1]["y"]; // current y
+          double psi = j[1]["psi"]; // current heading
+          double v = j[1]["speed"]; // current velocity
+
+          // Transform waypoints from map to vehicle coordinates
+          Eigen::VectorXd ptsx_transform(ptsx.size());
+          Eigen::VectorXd ptsy_transform(ptsy.size());
+          for (unsigned int i = 0; i < ptsx.size(); ++i) {
+            // shift the origin of waypoint relative to car
+            double x = ptsx[i] - px;
+            double y = ptsy[i] - py;
+            // rotate waypoint relative to car heading
+            ptsx_transform[i] = x * cos(-psi) - y * sin(-psi);
+            ptsy_transform[i] = x * sin(-psi) + y * cos(-psi);
+          }
+
+          // Fit a third order polynomial to the waypoints
+          auto coeffs = polyfit(ptsx_transform, ptsy_transform, 3);
+
+          // Calculate cross track error by evaluating the polynomial at x=0
+          double cte = polyeval(coeffs, 0);
+
+          // Calculate error psi (the difference between car heading and
+          // optimal heading)
+          double epsi = -atan(coeffs[1]);
+
+          Eigen::VectorXd state_E(6);
+          //state_E << px, py, psi, v, cte, epsi;
+          state_E << 0, 0, 0, v, cte, epsi;
+
+          actuation_vars vars = mpc.Solve(state_E, coeffs);
+
+          // Set steering angle and throttle solved by MPC
+          double steer_value = vars.d;
+          double throttle_value = vars.a;
+
+          /* -= Green Line =-
+            Display the MPC predicted trajectory
           */
-          double steer_value;
-          double throttle_value;
+          vector<double> mpc_x_vals = vars.x_vals;
+          vector<double> mpc_y_vals = vars.y_vals;
+
+          /* -= Yellow Line =-
+            Display the waypoints/reference line using the polynomial
+          */
+          vector<double> next_x_vals;
+          vector<double> next_y_vals;
+
+          int num_points = 25;
+          double unit = 2.5;
+          for (int i = 0; i < num_points; ++i) {
+            next_x_vals.push_back(i*unit);
+            next_y_vals.push_back(polyeval(coeffs, i*unit));
+          }
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          // NOTE: The heading update equation uses positive delta to infer a
+          // counter-clockwise (left) rotation. However, in the simulator, a
+          // positive value implies a right turn, so multiply by -1
+          msgJson["steering_angle"] = (steer_value / deg2rad(25)) * -Lf;
           msgJson["throttle"] = throttle_value;
-
-          //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Green line
-
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
-
-          //Display the waypoints/reference line
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Yellow line
-
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
+
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
@@ -151,8 +186,7 @@ int main() {
   });
 
   // We don't need this since we're not using HTTP but if it's removed the
-  // program
-  // doesn't compile :-(
+  // program doesn't compile :-(
   h.onHttpRequest([](uWS::HttpResponse *res, uWS::HttpRequest req, char *data,
                      size_t, size_t) {
     const std::string s = "<h1>Hello world!</h1>";
