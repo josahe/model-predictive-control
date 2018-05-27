@@ -119,21 +119,15 @@ int main() {
           // optimal heading)
           double epsi = -atan(coeffs[1]);
 
-          Eigen::VectorXd state_E(6);
-          //state_E << px, py, psi, v, cte, epsi;
-          state_E << 0, 0, 0, v, cte, epsi;
+          Eigen::VectorXd state_vector(6);
+          //state_vector << px, py, psi, v, cte, epsi;
+          state_vector << 0, 0, 0, v, cte, epsi;
 
-          actuation_vars vars = mpc.Solve(state_E, coeffs);
+          actuation_vars vars = mpc.Solve(state_vector, coeffs);
 
           // Set steering angle and throttle solved by MPC
           double steer_value = vars.d;
           double throttle_value = vars.a;
-
-          /* -= Green Line =-
-            Display the MPC predicted trajectory
-          */
-          vector<double> mpc_x_vals = vars.x_vals;
-          vector<double> mpc_y_vals = vars.y_vals;
 
           /* -= Yellow Line =-
             Display the waypoints/reference line using the polynomial
@@ -148,20 +142,24 @@ int main() {
             next_y_vals.push_back(polyeval(coeffs, i*unit));
           }
 
-          json msgJson;
+          /* -= Green Line =-
+            Display the MPC predicted trajectory
+          */
+          vector<double> mpc_x_vals = vars.x_vals;
+          vector<double> mpc_y_vals = vars.y_vals;
+
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
           // NOTE: The heading update equation uses positive delta to infer a
           // counter-clockwise (left) rotation. However, in the simulator, a
           // positive value implies a right turn, so multiply by -1
+          json msgJson;
           msgJson["steering_angle"] = (steer_value / deg2rad(25)) * -Lf;
           msgJson["throttle"] = throttle_value;
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
-
-
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
@@ -174,7 +172,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          //this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
