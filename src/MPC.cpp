@@ -7,11 +7,11 @@ using CppAD::AD;
 
 // Set the timestep length and duration
 // NOTE: A sensible value for T=N*dt is around 2 seconds
-size_t N = 10;
+size_t N = 8;
 double dt = 0.1;
 
 // Reference velocity
-double ref_v = 60;
+double ref_v = 30;
 
 // NOTE Both the reference cross track and orientation errors are 0.
 
@@ -27,7 +27,6 @@ size_t epsi_start = cte_start + N;
 size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
-
 class FG_eval {
  public:
   // Fitted polynomial coefficients
@@ -35,6 +34,14 @@ class FG_eval {
   FG_eval(Eigen::VectorXd coeffs) { this->coeffs = coeffs; }
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
+
+  int FG_argc;
+  char **FG_argv;
+
+  void pass_args(int argc, char **argv) {
+    FG_argc = argc;
+    FG_argv = argv;
+  }
 
   // Vector fg contains the cost function and vehicle model and constraints.
   // Vector vars contains the variable values (state & actuators) used by the
@@ -55,21 +62,21 @@ class FG_eval {
 
     // Minimise the state variables, concentrating on errors
     for (unsigned int t = 0; t < N; ++t) {
-      fg[0] += 2000*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 2000*CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += argv[0]*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += argv[1]*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += argv[2]*CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of steering and throttle
     for (unsigned int t = 0; t < N - 1; ++t) {
-      fg[0] += 100*CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
+      fg[0] += argv[3]*CppAD::pow(vars[delta_start + t], 2); // 100
+      fg[0] += argv[4]*CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (unsigned int t = 0; t < N - 2; ++t) {
-      fg[0] += 200*CppAD::pow(vars[delta_start+t+1] - vars[delta_start+t], 2);
-      fg[0] += 10*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += argv[5]*CppAD::pow(vars[delta_start+t+1] - vars[delta_start+t], 2);
+      fg[0] += argv[6]*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     /***************************************************************************
@@ -235,7 +242,7 @@ actuation_vars MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
   // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
+  options += "Numeric max_cpu_time          0.05\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;

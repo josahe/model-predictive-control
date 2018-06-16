@@ -65,11 +65,27 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
-int main() {
+// Global Kinematic Model
+// Returns updated state using the model, by predicting the next state after a given latency
+void globalKinematic(double &x, double &y, double &p, double &v, double d, double a, double latency) {
+  double new_v = v + a*latency;
+  double new_p = p + (v/Lf)*d*latency;
+  double new_x = x + v*cos(p)*latency;
+  double new_y = y + v*sin(p)*latency;
+
+  x=new_x;
+  y=new_y;
+  v=new_v;
+  p=new_p;
+}
+
+int main(int argc, char **argv) {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
+
+  mpc.pass_args(argc, argv);
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -96,6 +112,12 @@ int main() {
           double py = j[1]["y"]; // current y
           double psi = j[1]["psi"]; // current heading
           double v = j[1]["speed"]; // current velocity
+          double d = j[1]["steering_angle"];
+          double a = j[1]["throttle"];
+
+          // Simulate dynamics and account for 100ms system latency
+          double latency = 0.1;
+          globalKinematic(px, py, psi, v, d, a, latency);
 
           // Transform waypoints from map to vehicle coordinates
           Eigen::VectorXd ptsx_transform(ptsx.size());
@@ -173,7 +195,7 @@ int main() {
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
           // TODO add latency to the model
-          //this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
