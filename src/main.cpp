@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <stdlib.h>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
@@ -85,7 +86,24 @@ int main(int argc, char **argv) {
   // MPC is initialized here!
   MPC mpc;
 
-  mpc.pass_args(argc, argv);
+  // set weights for cost functions
+  std::vector<double> weights = {2000, 2000, 1, 5, 5, 200, 10};
+
+  // Override weights if passed in on command line
+  if (argc > 1) {
+    for (int i = 1; i < argc; ++i) {
+      weights[i-1] = atof(argv[i]);
+    }
+  }
+
+  std::cout << "Weights are: ";
+  for (unsigned int i = 0; i < weights.size(); ++i) {
+    std::cout << weights[i] << " ";
+  }
+  std::cout << std::endl;
+
+  // pass weights to model
+  mpc.pass_args(weights);
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {

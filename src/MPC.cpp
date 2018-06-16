@@ -35,12 +35,10 @@ class FG_eval {
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
 
-  int FG_argc;
-  char **FG_argv;
+  std::vector<double> weights;
 
-  void pass_args(int argc, char **argv) {
-    FG_argc = argc;
-    FG_argv = argv;
+  void pass_args(std::vector<double> args) {
+    weights = args;
   }
 
   // Vector fg contains the cost function and vehicle model and constraints.
@@ -62,21 +60,21 @@ class FG_eval {
 
     // Minimise the state variables, concentrating on errors
     for (unsigned int t = 0; t < N; ++t) {
-      fg[0] += argv[0]*CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += argv[1]*CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += argv[2]*CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += weights[0]*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += weights[1]*CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += weights[2]*CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of steering and throttle
     for (unsigned int t = 0; t < N - 1; ++t) {
-      fg[0] += argv[3]*CppAD::pow(vars[delta_start + t], 2); // 100
-      fg[0] += argv[4]*CppAD::pow(vars[a_start + t], 2);
+      fg[0] += weights[3]*CppAD::pow(vars[delta_start + t], 2); // 100
+      fg[0] += weights[4]*CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (unsigned int t = 0; t < N - 2; ++t) {
-      fg[0] += argv[5]*CppAD::pow(vars[delta_start+t+1] - vars[delta_start+t], 2);
-      fg[0] += argv[6]*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += weights[5]*CppAD::pow(vars[delta_start+t+1] - vars[delta_start+t], 2);
+      fg[0] += weights[6]*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     /***************************************************************************
@@ -141,6 +139,11 @@ class FG_eval {
 //
 MPC::MPC() {}
 MPC::~MPC() {}
+
+void MPC::pass_args(std::vector<double> args) {
+  weights = args;
+}
+
 
 actuation_vars MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
@@ -225,6 +228,8 @@ actuation_vars MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   // object that computes objective and constraints
   FG_eval fg_eval(coeffs);
+
+  fg_eval.pass_args(weights);
 
   //
   // NOTE: You don't have to worry about these options

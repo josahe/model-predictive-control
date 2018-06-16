@@ -25,6 +25,11 @@ class MPC {
   // Solve the model given an initial state and polynomial coefficients.
   // Return the first actuations.
   actuation_vars Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+
+  // Pass weights to MPC provided on command line
+  std::vector<double> weights;
+  void pass_args(std::vector<double> args);
+
 };
 
 #endif /* MPC_H */
