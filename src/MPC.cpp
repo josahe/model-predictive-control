@@ -11,7 +11,7 @@ size_t N = 8;
 double dt = 0.1;
 
 // Reference velocity
-double ref_v = 30;
+double ref_v = 50;
 
 // NOTE Both the reference cross track and orientation errors are 0.
 
@@ -193,8 +193,8 @@ actuation_vars MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // degrees (values in radians).
   // NOTE: Feel free to change this to something else.
   for (unsigned int i = delta_start; i < a_start; ++i) {
-    vars_lowerbound[i] = -0.436332*Lf;
-    vars_upperbound[i] =  0.436332*Lf;
+    vars_lowerbound[i] = -0.436332;
+    vars_upperbound[i] =  0.436332;
   }
 
   // Acceleration/decceleration upper and lower limits.

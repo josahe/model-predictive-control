@@ -18,6 +18,14 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+// Keeps a record of the real latency of the solver and simulator
+std::chrono::time_point<std::chrono::system_clock> then;
+double calc_latency(std::chrono::time_point<std::chrono::system_clock> then) {
+  auto now = std::chrono::system_clock::now();
+  auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(now - then);
+  return dur.count() / 1000.;
+}
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -67,12 +75,12 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
 }
 
 // Global Kinematic Model
-// Returns updated state using the model, by predicting the next state after a given latency
-void globalKinematic(double &x, double &y, double &p, double &v, double d, double a, double latency) {
-  double new_v = v + a*latency;
-  double new_p = p + (v/Lf)*d*latency;
-  double new_x = x + v*cos(p)*latency;
-  double new_y = y + v*sin(p)*latency;
+// Returns updated state using the model, by predicting the next state after a given latency, dt
+void globalKinematic(double &x, double &y, double &p, double &v, double d, double a, double dt) {
+  double new_v = v + a*dt;
+  double new_p = p + (v/Lf)*(-d)*dt;
+  double new_x = x + v*cos(p)*dt;
+  double new_y = y + v*sin(p)*dt;
 
   x=new_x;
   y=new_y;
@@ -86,8 +94,11 @@ int main(int argc, char **argv) {
   // MPC is initialized here!
   MPC mpc;
 
+  // initiate for first latency calculation
+  then = std::chrono::system_clock::now();
+
   // set weights for cost functions
-  std::vector<double> weights = {2000, 2000, 1, 5, 5, 200, 10};
+  std::vector<double> weights = {2, 10, 5, 3000, 100, 500, 100};
 
   // Override weights if passed in on command line
   if (argc > 1) {
@@ -111,7 +122,7 @@ int main(int argc, char **argv) {
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -129,13 +140,14 @@ int main(int argc, char **argv) {
           double px = j[1]["x"]; // current x
           double py = j[1]["y"]; // current y
           double psi = j[1]["psi"]; // current heading
-          double v = j[1]["speed"]; // current velocity
+          double v = j[1]["speed"]; // current velocity TODO convert to m/s
           double d = j[1]["steering_angle"];
           double a = j[1]["throttle"];
 
-          // Simulate dynamics and account for 100ms system latency
-          double latency = 0.1;
-          globalKinematic(px, py, psi, v, d, a, latency);
+          // Simulate dynamics and account for latency
+          globalKinematic(px, py, psi, v, d, a, calc_latency(then));
+
+          then = std::chrono::system_clock::now();
 
           // Transform waypoints from map to vehicle coordinates
           Eigen::VectorXd ptsx_transform(ptsx.size());
@@ -194,7 +206,7 @@ int main(int argc, char **argv) {
           // counter-clockwise (left) rotation. However, in the simulator, a
           // positive value implies a right turn, so multiply by -1
           json msgJson;
-          msgJson["steering_angle"] = (steer_value / deg2rad(25)) * -Lf;
+          msgJson["steering_angle"] = -1 * (steer_value / deg2rad(25));
           msgJson["throttle"] = throttle_value;
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -202,7 +214,9 @@ int main(int argc, char **argv) {
           msgJson["next_y"] = next_y_vals;
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+
+          //std::cout << msg << std::endl;
+
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
