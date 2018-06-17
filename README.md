@@ -18,5 +18,5 @@ This project was undertaken as part of the [Udacity Self-Driving Car NanoDegree]
 * https://github.com/udacity/CarND-Controls-MPC
 
 ## RELEVANT FILES
-* [src/main.cpp](main.cpp)
-* [src/MPC.cpp](MPC.cpp)
+* [main.cpp](./src/main.cpp)
+* [MPC.cpp](./src/MPC.cpp)
