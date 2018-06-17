@@ -8,8 +8,11 @@ The processing pipeline consists of three primary functions:
 The prediction step produces an updated vehicle state by using a model that captures the kinematic nature of a dynamical vehicle system to calculate the change in the current state after some time, `dt`. The current state is passed in by the simulator.
 
 ![](./images/kinematic_model_x.png)
+
 ![](./images/kinematic_model_y.png)
+
 ![](./images/kinematic_model_psi.png)
+
 ![](./images/kinematic_model_v.png)
 
 The vehicle state is modeled using `x` and `y` coordinates, a heading `psi`, speed `v`, steering angle `d` and acceleration `a`. The prediction is calculated by passing references to the state variables to a modeling function `globalKinematic(x, y, psi, v, d, a, dt)`, which updates the state variables using the above state equations.
